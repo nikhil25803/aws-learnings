@@ -64,18 +64,113 @@ Next to the configuration part, it does ask for a decent number of fields. 
 
 In the Access Policy, here we can define who can send messages to the queue and who can consume messages from these queues. By default, it is limited to the owner, but additionally, we can allow other AWS accounts or AIM users by providing the required identification or credentials.
 
-Dead Letter Queue - When a message in the queue fails to process or consumed, after a delay it will again enters the queue for a retry. But what if it keeps happen again and again? Using dead letter queue, SQS add this to a secondary queue using the dead letter queue configuration. Additionally we can set alarm to this secondary queue where if it exceed a given number it will notify me. We can even program it such that after a defined condition or time, the main queue can again pick these secondary queue messages and attempts for the processing.
-The secondary queue created is sister DLQ in, and follows a name convention like if main queue is named `DemoQueue`, then the sister queue is known as `DemoQueueDLQ`
+Dead Letter Queue - When a message in the queue fails to process or is consumed, after a delay it will again enter the queue for a retry. But what if it keeps happening again and again? Using a dead letter queue, SQS adds this to a secondary queue using the dead letter queue configuration. Additionally, we can set an alarm to this secondary queue where if it exceeds a given number it will notify me. We can even program it such that after a defined condition or time, the main queue can again pick these secondary queue messages and attempts for processing.
+The secondary queue created is sister DLQ, and follows a name convention like if the main queue is named `DemoQueue`, then the sister queue is known as `DemoQueueDLQ`
 ![image](https://github.com/nikhil25803/aws-learnings/assets/93156825/7d7981af-cda6-42ac-bc12-702ebade5d59)
 
 Once created the queue, the dashboard looks like
 
 ![image](https://github.com/nikhil25803/aws-learnings/assets/93156825/5bb77d53-9ab6-4e6c-adfc-01a8ed23a335)
 
-In the dahsboard, there is a `Purge` button on the top right which means that we can delete all the messages at once. You can send messages using the dashboard and can can play around it.
-While sending a message, ther's a optional message attributes section which is used to filter data on basis of some tags, attributes to be precise. On messgae can have at max 10 attributes.
+In the dashboard, there is a `Purge` button on the top right which means that we can delete all the messages at once. You can send messages using the dashboard and can play around with it.
+While sending a message, there's an optional message attributes section that is used to filter data based on some tag attributes to be precise. On message can have at max 10 attributes.
 
 ![image](https://github.com/nikhil25803/aws-learnings/assets/93156825/26040594-75a3-4f75-ba57-2da7e2c9a98c)
 
-At the receiver end, we can see that there is a `Maximum Message Count` section , which simply defines the batch size of the message to be processed at once. On clicking the `Poll Message` you can receive the messages that you sent or added to the queue.
+At the receiver end, we can see that there is a `Maximum Message Count` section, which simply defines the batch size of the message to be processed at once. On clicking the `Poll Message` you can receive the messages that you sent or added to the queue.
+
+-------------------------------
+
+# SNS + SQS
+
++ Step 1 - Create an SQS queue and copy the ARN as it will be used as a unique identifier while integrating it with SNS Topic.
++ Step 2 - Go to the SNS console and create a topic.
++ Step 3 - Once the topic has been created, on the dashboard click `Create Subscription` (on SNS dashboard).
++ Step 4 - This will open a page, where in the protocol section chose Amazon SQS.
++ Step 5 - Select the SQS among the options that appeared or paste the `ARN` you copied earlier and hit `Save`
+
+-------------------------
+
+# SQS + Lambda
++ Step 1 - Create a lambda function from the lambda console.
++ Step 2 - We need to create a new role with basis Lambda permission, SQS generally requires `sqs: ReceiveMessage`, `sqs: DeleteMessage`, and `sqs: GetQueueAttributes`.
++ Step 3 - We can also choose the template provided by `AWS`. The final configuration looks like the image shown below
+
+![image](https://github.com/nikhil25803/aws-learnings/assets/93156825/2f3216cb-d56c-42b4-b84a-50fcf6fc91cd)
+
++ Step 4 - Click on create and now the lambda function is up and ready.
+  
+The sample event body of the lambda function with SQS looks like
+```js
+{
+    "Records": [
+        {
+            "messageId": "059f36b4-87a3-44ab-83d2-661975830a7d",
+            "receiptHandle": "AQEBwJnKyrHigUMZj6rYigCgxlaS3SLy0a...",
+            "body": "Test message.",
+            "attributes": {
+                "ApproximateReceiveCount": "1",
+                "SentTimestamp": "1545082649183",
+                "SenderId": "AIDAIENQZJOLO23YVJ4VO",
+                "ApproximateFirstReceiveTimestamp": "1545082649185"
+            },
+            "messageAttributes": {},
+            "md5OfBody": "e4e68fb7bd0e697a0ae8f1bb342846b3",
+            "eventSource": "aws:sqs",
+            "eventSourceARN": "arn:aws:sqs:us-east-2:123456789012:my-queue",
+            "awsRegion": "us-east-2"
+        },
+        {
+            "messageId": "2e1424d4-f796-459a-8184-9c92662be6da",
+            "receiptHandle": "AQEBzWwaftRI0KuVm4tP+/7q1rGgNqicHq...",
+            "body": "Test message.",
+            "attributes": {
+                "ApproximateReceiveCount": "1",
+                "SentTimestamp": "1545082650636",
+                "SenderId": "AIDAIENQZJOLO23YVJ4VO",
+                "ApproximateFirstReceiveTimestamp": "1545082650649"
+            },
+            "messageAttributes": {},
+            "md5OfBody": "e4e68fb7bd0e697a0ae8f1bb342846b3",
+            "eventSource": "aws:sqs",
+            "eventSourceARN": "arn:aws:sqs:us-east-2:123456789012:my-queue",
+            "awsRegion": "us-east-2"
+        }
+    ]
+}
+```
+Here we need to extract the `body` from the `Records` section. The sample Python code to read the body looks like this.
+```python
+import json
+
+
+def lambda_handler(event, context):
+    records = event["Records"]
+    
+    for record in records:
+        body = record["body"]
+        print(body)
+```
+
++ Step 5 - Add this code snippet in the lambda function and click `Deploy`.
++ Step 6 - Now go to the SQS console and create a new SQS queue.
++ Step 7 - Go back to the lambda function console, and click add triggers. There we need to select the SQS protocol and select the queue from the dropdown which we want to add as a trigger.
++ Step 8 - You can also cross-check from the SQS queue dashboard in the lambda trigger section that the lambda where added to this queue as a trigger is now listed here.
+
+---------------------------
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
